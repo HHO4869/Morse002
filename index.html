@@ -1,0 +1,315 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+  <meta charset="UTF-8" />
+  <title>My Instagram</title>
+  <style>
+    html, body {
+      height: 100%;
+      margin: 0;
+      padding: 0;
+    }
+    body {
+      font-family: sans-serif;
+      display: flex;
+      flex-direction: column;
+      background: linear-gradient(135deg, #feda75, #d62976, #962fbf);
+      background-size: 400% 400%;
+      animation: gradientBG 10s ease infinite;
+      color: #fff;
+      overflow: hidden;
+      align-items: center;
+    }
+    @keyframes gradientBG {
+      0% { background-position: 0% 50%; }
+      50% { background-position: 100% 50%; }
+      100% { background-position: 0% 50%; }
+    }
+    h1 {
+      font-size: 32px;
+      margin: 80px 0 10px 0;
+    }
+    #countdown {
+      font-size: 24px;
+      margin: 10px 0;
+      height: 30px;
+    }
+    .wrapper {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      width: 100%;
+      max-width: 720px;
+      position: relative;
+    }
+    .container {
+      position: relative;
+      width: 100%;
+      height: 120px;
+      user-select: none;
+    }
+    .barrel {
+      width: 100px;
+      height: 100px;
+      font-size: 60px;
+      cursor: pointer;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      position: absolute;
+      top: 0;
+      left: 0;
+      transition: transform 0.6s ease;
+    }
+    .icon {
+      font-size: 60px;
+      transition: transform 0.3s ease;
+    }
+    .label {
+      font-size: 14px;
+      color: yellow;
+      margin-top: 6px;
+    }
+    .hint {
+      font-size: 14px;
+      color: #0f0;
+    }
+    #result {
+      margin-top: 15px;
+      font-size: 20px;
+      font-weight: bold;
+      text-align: center;
+      min-height: 30px;
+    }
+    .controls {
+      margin-top: 30px;
+      margin-bottom: 20px;
+      display: flex;
+      gap: 15px;
+    }
+    button {
+      font-size: 16px;
+      padding: 10px 20px;
+      cursor: pointer;
+      border: none;
+      border-radius: 5px;
+      background-color: rgba(255,255,255,0.2);
+      color: white;
+    }
+    button:hover {
+      background-color: rgba(255,255,255,0.3);
+    }
+    .hearts {
+      position: absolute;
+      top: 100px;
+      left: 20px;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+    .heart {
+      font-size: 24px;
+      filter: brightness(0.5);
+      transition: filter 0.3s;
+    }
+    .heart.glow {
+      filter: brightness(2);
+    }
+  </style>
+</head>
+<body>
+  <h1>MY Instagram</h1>
+  <div id="countdown"></div>
+  <div class="wrapper">
+    <div class="hearts" id="hearts">
+      <div class="heart" id="heart1">❤️</div>
+      <div class="heart" id="heart2">❤️</div>
+      <div class="heart" id="heart3">❤️</div>
+    </div>
+    <div class="container" id="barrelContainer"></div>
+    <div id="result"></div>
+    <div class="controls">
+      <button onclick="startGame()">▶️ เริ่ม</button>
+      <button onclick="resetGame()">🔄 รีเซ็ต</button>
+    </div>
+  </div>
+
+  <audio id="clickSound" src="https://www.soundjay.com/buttons/sounds/button-16.mp3"></audio>
+
+  <script>
+    const morse = ".... ..--- --- .._. .-.. ..- --. -. .- --";
+    const roundBarrelCounts = [3, 4, 5];
+    const roundMessages = ["เก่งมาก", "อย่ายอมแพ้", morse];
+    const roundSpeed = 800;
+
+    let barrels = [];
+    let answerIndex = 0;
+    let gameStarted = false;
+    let isPlaying = false;
+    let hasGuessed = false;
+    let currentRound = 0;
+    let switching = false;
+    let switchingTimer = null;
+
+    const barrelContainer = document.getElementById("barrelContainer");
+    const result = document.getElementById("result");
+    const countdown = document.getElementById("countdown");
+    const heartEls = [
+      document.getElementById("heart1"),
+      document.getElementById("heart2"),
+      document.getElementById("heart3")
+    ];
+    const barrelSpacing = 140;
+
+    function getPositions(count) {
+      const containerWidth = barrelContainer.clientWidth;
+      const totalWidth = (count - 1) * barrelSpacing;
+      const shiftLeft = 50;
+      const startX = (containerWidth - totalWidth) / 2 - shiftLeft;
+      return Array.from({ length: count }, (_, i) => startX + i * barrelSpacing);
+    }
+
+    function createBarrels(count) {
+      barrelContainer.innerHTML = "";
+      barrels = [];
+
+      for (let i = 0; i < count; i++) {
+        const div = document.createElement("div");
+        div.className = "barrel";
+        div.innerHTML = `
+          <div class="icon">🪣</div>
+          <div class="label">${!gameStarted && i === answerIndex ? roundMessages[currentRound] : ""}</div>
+          <div class="hint"></div>
+        `;
+        div.dataset.index = i.toString();
+        div.onclick = () => reveal(div);
+        barrels.push(div);
+        barrelContainer.appendChild(div);
+      }
+      positionBarrels(count);
+    }
+
+    function positionBarrels(count) {
+      const positions = getPositions(count);
+      barrels.forEach((barrel, i) => {
+        barrel.style.transform = `translateX(${positions[i]}px)`;
+      });
+    }
+
+    function shuffle(array) {
+      for (let i = array.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [array[i], array[j]] = [array[j], array[i]];
+      }
+    }
+
+    async function startGame() {
+      if (isPlaying || switching) return;
+      if (currentRound >= roundBarrelCounts.length) return;
+
+      const count = roundBarrelCounts[currentRound];
+      gameStarted = true;
+      isPlaying = true;
+      hasGuessed = false;
+      result.textContent = "";
+      answerIndex = Math.floor(Math.random() * count);
+      createBarrels(count);
+      clearBarrels();
+
+      switching = true;
+      let step = 0;
+      const totalSteps = 10;
+      const doSwitch = () => {
+        shuffle(barrels);
+        const positions = getPositions(count);
+        barrels.forEach((barrel, i) => {
+          const curveY = Math.random() > 0.5 ? -30 : 30;
+          barrel.style.transform = `translate(${positions[i]}px, ${curveY}px)`;
+          setTimeout(() => {
+            barrel.style.transform = `translate(${positions[i]}px, 0px)`;
+          }, roundSpeed / 2);
+        });
+
+        step++;
+        if (step < totalSteps) {
+          switchingTimer = setTimeout(doSwitch, roundSpeed);
+        } else {
+          switching = false;
+          isPlaying = false;
+        }
+      };
+      doSwitch();
+    }
+
+    function reveal(barrel) {
+      if (!gameStarted || isPlaying || hasGuessed) return;
+      hasGuessed = true;
+      document.getElementById("clickSound").play();
+
+      const index = barrels.indexOf(barrel);
+      const icon = barrel.querySelector(".icon");
+      const label = barrel.querySelector(".label");
+      const hint = barrel.querySelector(".hint");
+
+      label.textContent = "";
+      hint.textContent = "";
+
+      if (index === answerIndex) {
+        icon.style.transform = "translateY(-15px)";
+        hint.textContent = roundMessages[currentRound];
+        heartEls[currentRound].classList.add("glow");
+        currentRound++;
+        if (currentRound < roundBarrelCounts.length) {
+          showCountdown(3, () => startGame());
+        }
+      } else {
+        result.textContent = "Don’t found Me";
+        setTimeout(() => resetGame(), 1500);
+      }
+    }
+
+    function showCountdown(seconds, callback) {
+      let count = seconds;
+      countdown.textContent = count;
+      const timer = setInterval(() => {
+        count--;
+        countdown.textContent = count > 0 ? count : "";
+        if (count <= 0) {
+          clearInterval(timer);
+          callback();
+        }
+      }, 1000);
+    }
+
+    function clearBarrels() {
+      barrels.forEach((b) => {
+        b.querySelector(".label").textContent = "";
+        b.querySelector(".hint").textContent = "";
+        b.querySelector(".icon").style.transform = "translateY(0)";
+      });
+    }
+
+    function resetGame() {
+      clearTimeout(switchingTimer);
+      switching = false;
+      gameStarted = false;
+      isPlaying = false;
+      hasGuessed = false;
+      currentRound = 0;
+      countdown.textContent = "";
+      result.textContent = "";
+      heartEls.forEach(h => h.classList.remove("glow"));
+      createBarrels(roundBarrelCounts[0]);
+    }
+
+    window.addEventListener("resize", () => {
+      if (barrels.length) positionBarrels(barrels.length);
+    });
+
+    resetGame();
+  </script>
+</body>
+</html>
